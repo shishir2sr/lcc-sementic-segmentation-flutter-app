@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'dart:ui' as ui;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
+typedef Tensor4D = List<List<List<List<double>>>>;
 void main() => runApp(const MyApp());
 
 class MyApp extends StatefulWidget {
@@ -30,41 +31,45 @@ class _MyAppState extends State<MyApp> {
     const String model3Name = 'assets/LCC_Tflite_model_ShapeChanged.tflite';
     const String imagePath = 'assets/1.png';
 
+    // Load model and image
     final interpreter = await Interpreter.fromAsset(model3Name);
-    interpreter.allocateTensors();
-    final inputShape = interpreter.getInputTensor(0).shape;
-    final outputShape = interpreter.getOutputTensor(0).shape;
-    print(inputShape);
-    print(outputShape);
-
     final image = await loadImage(imagePath);
-    img.Image preprocessedImage = preprocessImage(image!);
-    setState(() {
-      _image =
-          Image.memory(Uint8List.fromList(img.encodePng(preprocessedImage)));
-    });
+    if (image == null) return;
 
-    // Prepare the input tensor
-    var input = imageToTensor(preprocessedImage, 256, 256);
-    // Allocate space for output tensor
-    var output = List.generate(
-        1,
-        (_) => List.generate(
-            256, (_) => List.generate(256, (_) => List.filled(1, 0.0))));
+    // Preprocess the image
+    img.Image preprocessedImage = preprocessImage(image);
+    Tensor4D input = imageToTensor(preprocessedImage, 256, 256);
+    setState(() => _image =
+        Image.memory(Uint8List.fromList(img.encodePng(preprocessedImage))));
+
+    // Adjust the shape of the output tensor to match the interpreter's expected output
+    Tensor4D output = getOutputTensor();
+
     // Run inference
     interpreter.run(input, output);
 
+    // Post-process to create mask image
     final maskImage = applyMaskToImage(preprocessedImage, output);
-    setState(() {
-      _output = maskImage;
-    });
+    setState(() => _output = maskImage);
 
     // Close the interpreter
     interpreter.close();
   }
 
-  Uint8List applyMaskToImage(
-      img.Image originalImage, List<List<List<List<double>>>> tensor) {
+  Tensor4D getOutputTensor() {
+    return List.generate(
+      1,
+      (_) => List.generate(
+        256,
+        (_) => List.generate(
+          256,
+          (_) => List.filled(1, 0.0),
+        ),
+      ),
+    );
+  }
+
+  Uint8List applyMaskToImage(img.Image originalImage, Tensor4D tensor) {
     int width = originalImage.width;
     int height = originalImage.height;
 
@@ -86,18 +91,6 @@ class _MyAppState extends State<MyApp> {
     return Uint8List.fromList(img.encodePng(originalImage));
   }
 
-  Future<Uint8List?> removeBackground(
-      Uint8List originalImage, Uint8List maskImage) async {
-    return null;
-  }
-
-  Future<Uint8List?> _convertUiImageToByteData(ui.Image image) async {
-    final ByteData? byteData =
-        await image.toByteData(format: ui.ImageByteFormat.png);
-
-    return byteData?.buffer.asUint8List();
-  }
-
   // Prints true if there's at least one 1.0 in the output, otherwise false
 
   Future<img.Image?> loadImage(String assetPath) async {
@@ -113,8 +106,7 @@ class _MyAppState extends State<MyApp> {
     return resized;
   }
 
-  List<List<List<List<double>>>> imageToTensor(
-      img.Image image, int width, int height) {
+  Tensor4D imageToTensor(img.Image image, int width, int height) {
     // Initialize the tensor as a 1x256x256x3 list (initialized to zeroes)
     var tensor = List.generate(
         1,
