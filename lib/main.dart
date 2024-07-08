@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ffi';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Uint8List, rootBundle;
 import 'package:image/image.dart' as img;
@@ -133,13 +134,20 @@ class _MyAppState extends State<MyApp> {
         appBar: AppBar(
           title: const Text('TFLite Model Example'),
         ),
-        body: Column(
-          children: <Widget>[
-            // ignore: unnecessary_null_comparison
-            (_image != null) ? _image! : Container(),
-            (_output != null) ? Image.memory(_output!) : Container(),
-          ],
-        ),
+        body: _output != null
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    // ignore: unnecessary_null_comparison
+                    (_image != null) ? _image! : Container(),
+                    const SizedBox(height: 20),
+                    (_output != null) ? Image.memory(_output!) : Container(),
+                  ],
+                ),
+              )
+            : const CircularProgressIndicator(),
         floatingActionButton: FloatingActionButton(
           onPressed: () {},
           tooltip: 'Pick Image',
